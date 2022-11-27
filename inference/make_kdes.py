@@ -1,6 +1,9 @@
+import sys
 import numpy as np
-from kde_posterior import read_samples, interpolate
 import matplotlib.pyplot as plt
+from astropy.cosmology import Planck15 as cosmo
+
+from utils import read_samples, kdeND, invert
 
 homedir = '/home/kris/Documents/research/3GEoS_project/'
 datadir = homedir + 'data/'
@@ -9,79 +12,77 @@ savefile = datadir + 'kdes/event_kdes_res50_new.npz'
 densities = []
 
 logz = []
-res = 50
-factors = np.array([(1, 0.05), (1, 0.05), (1, 0.05),
-                    (1, 0.05), (1, 0.05), (1, 0.05),
-                    (1, 0.05), (1, 0.05), (1, 0.05),
-                    (1, 0.05), (1, 0.05), (1, 0.05),
-                    (1, 0.05)
-                    ])
+res = 100
 min_max_values_list = []
 m_axs = []
 l_axs = []
-events = np.arange(0, 13, 1)
-inds = np.arange(0, 13, 1)
-ncols = 4
-fm = plt.subplots(int(np.ceil(len(events)/ncols)), ncols, figsize=(12, 9))
-fm_ = plt.subplots(int(np.ceil(len(events)/ncols)), 2*ncols, figsize=(24, 9))
-fl = plt.subplots(int(np.ceil(len(events)/ncols)), ncols, figsize=(12, 9))
-fl_ = plt.subplots(int(np.ceil(len(events)/ncols)), 2*ncols, figsize=(24, 9))
+
+events = np.arange(0, 13, 1)[:]
+inds = np.arange(0, 13, 1)[:]
+
+kde_list = []
+axes_list = []
 for i, event in enumerate(events):
     j = inds[i]
 
     samples_file = datadir + 'samples/event_{}_pesummary.dat'.format(event)
-    density, m_ax, l_ax = interpolate(samples_file, res=res, bw=factors[i],
-                                      plot=False, sup_data=None, event=event)
-    densities.append(density)
-    m_axs.append(m_ax)
-    l_axs.append(l_ax)
-    cm = m_ax[0]
-    q = m_ax[1]
-    l1 = l_ax[0]
-    l2 = l_ax[1]
+    samples, _ = read_samples(samples_file,
+                              params=['chirp_mass_source', 'mass_ratio',
+                                      'lambda_1', 'lambda_2'])
+    m_samples = samples[:, :2]
+    l_samples = samples[:, 2:]
 
-    mmvl = {}
-    mmvl["min_cm"] = min(cm)
-    mmvl["max_cm"] = max(cm)
-    mmvl["min_q"] = min(q)
-    mmvl["max_q"] = max(q)
-    mmvl["min_lambda_1"] = min(l1)
-    mmvl["max_lambda_1"] = max(l1)
-    mmvl["min_lambda_2"] = min(l2)
-    mmvl["max_lambda_2"] = max(l2)
-    min_max_values_list.append(mmvl)
+    # lumdist_samples, _ = read_samples(samples_file,
+    #                                   params=['luminosity_distance'])
 
-    data, params = read_samples(samples_file)
-    cm_samp = data[:, np.argwhere((params == 'chirp_mass_source'))[0]]
-    q_samp = data[:, np.argwhere((params == 'mass_ratio'))[0]]
-    l1_samp = data[:, np.argwhere((params == 'lambda_1'))[0]]
-    l2_samp = data[:, np.argwhere((params == 'lambda_2'))[0]]
+    # fig, ax = plt.subplots(figsize=(6, 6), dpi=200)
+    # ax.hist(lumdist_samples, bins='auto', density=True)
+    # ax.set_xlabel(r'$D_{\rm lum}$')
+    # fig.tight_layout()
 
-    row, col = i // ncols, i % ncols
-    row_, col_ = (2 * i) // (2 * ncols), (2 * i) % (2 * ncols)
-    lindensity = (np.exp(density[0]), np.exp(density[1]))
-    fm[1][row][col].pcolormesh(m_ax[0], m_ax[1], lindensity[0])
-    fm[1][row][col].scatter(cm_samp, q_samp, alpha=0.5)
-    fl[1][row][col].pcolormesh(l_ax[0], l_ax[1], lindensity[1])
-    fl[1][row][col].scatter(l1_samp, l2_samp, alpha=0.5)
+    # lum_dist = lambda z: cosmo.luminosity_distance(z).value
+    # z_samples = np.array([invert(s, lum_dist, 0.1) for s in lumdist_samples])
+    # m_samples[:, 0] /= (1 + z_samples)
 
-    fm_[1][row_][col_].hist(cm_samp, bins='auto', density=True, alpha=0.7)
-    fm_[1][row_][col_].plot(m_ax[0], np.sum(lindensity[0], axis=0) *
-                            np.diff(m_ax[1])[0], alpha=0.7)
-    fm_[1][row_][col_+1].hist(q_samp, bins='auto', density=True, alpha=0.7)
-    fm_[1][row_][col_+1].plot(m_ax[1], np.sum(lindensity[0], axis=1) *
-                              np.diff(m_ax[0])[0], alpha=0.7)
+    mkde, maxes = kdeND(m_samples, 'gaussian', 0.03, res)
+    lkde, laxes = kdeND(l_samples, 'tophat', 0.03, res)
+    kde_list.append((mkde, lkde))
+    axes_list.append((maxes, laxes))
 
-    fl_[1][row_][col_].hist(l1_samp, bins='auto', density=True, alpha=0.7)
-    fl_[1][row_][col_].plot(l_ax[0], np.sum(lindensity[1], axis=0) *
-                            np.diff(l_ax[1])[0], alpha=0.7)
-    fl_[1][row_][col_+1].hist(l2_samp, bins='auto', density=True, alpha=0.7)
-    fl_[1][row_][col_+1].plot(l_ax[1], np.sum(lindensity[1], axis=1) *
-                              np.diff(l_ax[0])[0], alpha=0.7)
-for f in [(fm, 'mass_2d_res50_new'), (fl, 'lambda_2d_res50_new'),
-          (fm_, 'mass_1d_res50_new'), (fl_, 'lambda_1d_res50_new')]:
-    f[0][0].tight_layout()
-    f[0][0].savefig(homedir + 'plots/kde_plots/' + f[1] + '.png')
+    ax1 = plt.subplot(121)
+    ax1.pcolormesh(maxes[0], maxes[1], np.exp(mkde))
+    inds = np.random.choice(np.arange(0, np.shape(samples)[0]), 1000)
+    ax1.scatter(m_samples[inds, 0], m_samples[inds, 1], color='r',
+                alpha=0.5, marker='.')
+    ax1.set_xlabel(r'$\mathcal{M}$')
+    ax1.set_ylabel(r'$q$')
 
-np.savez(savefile, densities=np.array(densities),
-         m_axs=np.array(m_axs), l_axs=np.array(l_axs))
+    ax2, ax3 = plt.subplot(222), plt.subplot(224)
+    ax2.hist(m_samples[:, 0], bins='auto', density=True)
+    ax2.plot(maxes[0], np.sum(np.exp(mkde), axis=0) * np.diff(maxes[1])[0])
+    ax2.set_xlabel(r'$\mathcal{M}$')
+    ax3.hist(m_samples[:, 1], bins='auto', density=True)
+    ax3.plot(maxes[1], np.sum(np.exp(mkde), axis=1) * np.diff(maxes[0])[0])
+    ax3.set_xlabel(r'$q$')
+    plt.tight_layout()
+    plt.show()
+
+    ax1 = plt.subplot(121)
+    ax1.pcolormesh(laxes[0], laxes[1], np.exp(lkde))
+    ax1.scatter(l_samples[inds, 0], l_samples[inds, 1], color='r',
+                alpha=0.5, marker='.')
+    ax1.set_xlabel(r'$\Lambda_1$')
+    ax1.set_ylabel(r'$\Lambda_2$')
+
+    ax2, ax3 = plt.subplot(222), plt.subplot(224)
+    ax2.hist(l_samples[:, 0], bins='auto', density=True)
+    ax2.plot(laxes[0], np.sum(np.exp(lkde), axis=0) * np.diff(laxes[1])[0])
+    ax2.set_xlabel(r'$\Lambda_1$')
+    ax3.hist(l_samples[:, 1], bins='auto', density=True)
+    ax3.plot(laxes[1], np.sum(np.exp(lkde), axis=1) * np.diff(laxes[0])[0])
+    ax3.set_xlabel(r'$\Lambda_2$')
+    plt.tight_layout()
+    plt.show()
+
+np.savez(savefile, kdes=np.array(kde_list), axes=np.array(axes_list),
+         event_ids=events)
