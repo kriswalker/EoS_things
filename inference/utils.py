@@ -24,35 +24,6 @@ def read_samples(path, params=None):
     return data, params
 
 
-def generate_kde(data, kernel, bandwidth, res):
-    data = np.copy(data)
-    xdata = data[:, 0]
-    ydata = data[:, 1]
-
-    # normalize data to range [0,1]
-    xmin = np.min(xdata)
-    xdata_ = xdata - xmin
-    xmax = np.max(xdata_)
-    data[:, 0] = xdata_ / xmax
-
-    ymin = np.min(ydata)
-    ydata_ = ydata - ymin
-    ymax = np.max(ydata_)
-    data[:, 1] = ydata_ / ymax
-
-    # interpolation grid
-    x = np.linspace(0, 1, res)
-    y = np.linspace(0, 1, res)
-    X, Y = np.meshgrid(x, y)
-    XY = np.stack((X.flatten(), Y.flatten()), axis=-1)
-
-    kde = KernelDensity(kernel=kernel, bandwidth=bandwidth).fit(data)
-    log_density = kde.score_samples(XY).reshape(res, res)
-    log_density -= (np.log(xmax) + np.log(ymax))
-
-    return (x * xmax) + xmin, (y * ymax) + ymin, log_density
-
-
 def kdeND(data, kernel, bandwidth, res):
     data_ = np.zeros(np.shape(data))
 

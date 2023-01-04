@@ -1,4 +1,3 @@
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.cosmology import Planck15 as cosmo
@@ -7,18 +6,22 @@ from utils import read_samples, kdeND, invert
 
 homedir = '/home/kris/Documents/research/3GEoS_project/'
 datadir = homedir + 'data/'
-savefile = datadir + 'kdes/event_kdes_res50_new.npz'
+savefile = datadir + 'kdes/event_kdes_50px.npz'
 
-densities = []
-
-logz = []
-res = 100
-min_max_values_list = []
-m_axs = []
-l_axs = []
+res = 50
+mbws = [0.03, 0.03, 0.03,
+        0.03, 0.03, 0.03,
+        0.03, 0.03, 0.01,
+        0.03, 0.03, 0.03,
+        0.03]
+lbws = [0.03, 0.03, 0.03,
+        0.03, 0.03, 0.03,
+        0.03, 0.03, 0.03,
+        0.03, 0.03, 0.03,
+        0.03]
 
 events = np.arange(0, 13, 1)[:]
-inds = np.arange(0, 13, 1)[:]
+inds = np.arange(0, len(events), 1)
 
 kde_list = []
 axes_list = []
@@ -44,15 +47,15 @@ for i, event in enumerate(events):
     # z_samples = np.array([invert(s, lum_dist, 0.1) for s in lumdist_samples])
     # m_samples[:, 0] /= (1 + z_samples)
 
-    mkde, maxes = kdeND(m_samples, 'gaussian', 0.03, res)
-    lkde, laxes = kdeND(l_samples, 'tophat', 0.03, res)
+    mkde, maxes = kdeND(m_samples, 'gaussian', mbws[j], res)
+    lkde, laxes = kdeND(l_samples, 'epanechnikov', lbws[j], res)
     kde_list.append((mkde, lkde))
     axes_list.append((maxes, laxes))
 
     ax1 = plt.subplot(121)
     ax1.pcolormesh(maxes[0], maxes[1], np.exp(mkde))
-    inds = np.random.choice(np.arange(0, np.shape(samples)[0]), 1000)
-    ax1.scatter(m_samples[inds, 0], m_samples[inds, 1], color='r',
+    randinds = np.random.choice(np.arange(0, np.shape(samples)[0]), 1000)
+    ax1.scatter(m_samples[randinds, 0], m_samples[randinds, 1], color='r',
                 alpha=0.5, marker='.')
     ax1.set_xlabel(r'$\mathcal{M}$')
     ax1.set_ylabel(r'$q$')
@@ -69,7 +72,7 @@ for i, event in enumerate(events):
 
     ax1 = plt.subplot(121)
     ax1.pcolormesh(laxes[0], laxes[1], np.exp(lkde))
-    ax1.scatter(l_samples[inds, 0], l_samples[inds, 1], color='r',
+    ax1.scatter(l_samples[randinds, 0], l_samples[randinds, 1], color='r',
                 alpha=0.5, marker='.')
     ax1.set_xlabel(r'$\Lambda_1$')
     ax1.set_ylabel(r'$\Lambda_2$')
@@ -84,5 +87,5 @@ for i, event in enumerate(events):
     plt.tight_layout()
     plt.show()
 
-np.savez(savefile, kdes=np.array(kde_list), axes=np.array(axes_list),
-         event_ids=events)
+# np.savez(savefile, kdes=np.array(kde_list), axes=np.array(axes_list),
+#          event_ids=events)

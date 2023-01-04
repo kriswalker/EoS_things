@@ -10,16 +10,16 @@ from likelihood import EOSLikelihood
 
 # homedir = '/fred/oz170/kwalker/projects/3G_EoS/'
 homedir = '/home/kris/Documents/research/3GEoS_project/'
-events_loudest = [6, 5, 4, 8, 0, 2, 1, 3, 7, 9, 10, 11]
+events_loudest = [6, 12, 5, 4, 8, 0, 2, 1, 3]
 
 # =============================================================================
 #  data options
 # =============================================================================
 
-ns = [3]
-n = ns[int(sys.argv[1])]
+ns = [3, 6, 9]
+n = 3#ns[int(sys.argv[1])]
 
-datafile = homedir + 'data/kdes/event_kdes_res50.npz'
+datafile = homedir + 'data/kdes/event_kdes_100px.npz'
 events = events_loudest[:n]
 
 # =============================================================================
@@ -27,7 +27,7 @@ events = events_loudest[:n]
 # =============================================================================
 
 eos = 'polytrope'
-pressure_array = np.logspace(np.log10(4e32), np.log10(2.5e35), 100)
+pressure_array = np.logspace(np.log10(4e32), np.log10(2.5e35), 50)
 maximum_mass = 1.97
 maximum_speed_of_sound = 1.1
 
@@ -41,8 +41,8 @@ npool = 1
 verbose = False
 resume = False
 
-label = 'eos'
-extension = '{}_{}loudest'.format(eos, n)
+bilby_label = 'eos'
+extension = '{}_{}loudest_test'.format(eos, n)
 outdir = homedir + 'results/outdir_n{0}_{1}'.format(npoints, extension)
 
 # =============================================================================
@@ -55,7 +55,7 @@ kde_list = data['kdes'][inds]
 axes_list = data['axes'][inds]
 events = data['event_ids'][inds]
 
-likelihood_list = []
+logZ_list = []
 for i, event in enumerate(events):
     results_file = homedir + \
         'data/json_files/inj_{}_data0_100-0_analysis'.format(event) + \
@@ -63,7 +63,7 @@ for i, event in enumerate(events):
     results = result.read_in_result(filename=results_file,
                                     outdir=None, label=None,
                                     extension='json', gzip=False)
-    likelihood_list.append(kde_list[i] + results.log_evidence)
+    logZ_list.append(results.log_evidence)
 
 priors = dict()
 if eos == 'polytrope':
@@ -88,11 +88,12 @@ elif eos == 'spectral':
                                             latex_label="$\\gamma_3$")
     parametrization = spectral_decomposition
 
-likelihood = EOSLikelihood(likelihood_list, axes_list, pressure_array,
+likelihood = EOSLikelihood(kde_list, axes_list, logZ_list, pressure_array,
                            maximum_mass, maximum_speed_of_sound,
-                           parametrization, **priors)
+                           parametrization, priors)
 
 results = bilby.core.sampler.run_sampler(
-    likelihood, priors=priors, sampler=sampler, label=label, npoints=npoints,
-    npool=npool, verbose=verbose, resume=resume, outdir=outdir)
+    likelihood, priors=priors, sampler=sampler, label=bilby_label,
+    npoints=npoints, npool=npool, verbose=verbose, resume=resume,
+    outdir=outdir)
 results.plot_corner()
